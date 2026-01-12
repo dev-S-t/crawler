@@ -1385,8 +1385,29 @@ Examples:
     parser.add_argument("--network", choices=["on", "off", "capture"], default="on",
                         help="Network capture mode")
     
+    parser.add_argument("--rag-only", help="Skip crawl and create RAG from existing data.json path")
+    
     args = parser.parse_args()
     
+    # RAG-only mode
+    if args.rag_only:
+        data_path = Path(args.rag_only)
+        if not data_path.exists():
+            print(f"❌ File not found: {data_path}")
+            sys.exit(1)
+        
+        if not LLM_AVAILABLE:
+            print("❌ GEMINI_API_KEY required for RAG feature")
+            sys.exit(1)
+            
+        print(f"🔍 RAG-only mode: using {data_path}")
+        # Use provided URL or dummy if not provided (though URL arg is required by parser unless we make it optional)
+        # We'll rely on args.url if provided, else dummy
+        source_url = args.url if args.url else "https://imported-data.local"
+        
+        asyncio.run(create_rag_store(data_path, source_url))
+        sys.exit(0)
+
     if not args.url:
         parser.print_help()
         sys.exit(1)
@@ -1404,10 +1425,152 @@ Examples:
     
     if result.get("success"):
         print(f"\n✅ Extraction complete!")
+        
+        # RAG Integration Prompt
+        run_dir = result.get("run_dir", "")
+        data_json_path = Path(run_dir) / "data.json" if run_dir else None
+        
+        if data_json_path and data_json_path.exists() and LLM_AVAILABLE:
+            print("\n" + "=" * 60)
+            print("\033[1;33m" + "=" * 60 + "\033[0m")
+            print("\033[1;33m   🔍 CONVERT TO RAG KNOWLEDGE BASE?                      \033[0m")
+            print("\033[1;33m   Upload extracted data to Gemini File Search for Q&A    \033[0m")
+            print("\033[1;33m" + "=" * 60 + "\033[0m")
+            print("\n   Type \033[1myes\033[0m to create a searchable knowledge base")
+            print("   Type \033[1mno\033[0m to skip (default)\n")
+            
+            try:
+                user_input = input("   \033[1m>>> Convert to RAG? [yes/no]: \033[0m").strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                user_input = "no"
+            
+            if user_input in ["yes", "y"]:
+                print("\n   📤 Creating File Search store...")
+                try:
+                    asyncio.run(create_rag_store(data_json_path, args.url))
+                except Exception as e:
+                    print(f"\n   ❌ RAG creation failed: {e}")
+        elif not LLM_AVAILABLE:
+            print("\n   ⚠️  RAG feature requires GEMINI_API_KEY")
     else:
         print(f"\n❌ Extraction failed: {result.get('error', 'unknown')}")
         sys.exit(1)
 
 
+async def create_rag_store(data_json_path: Path, source_url: str):
+    """Upload extracted data to Gemini File Search and output usage example."""
+    import time as time_module
+    
+    # Create store with descriptive name
+    domain = urlparse(source_url).netloc.replace(".", "_").replace("www_", "")
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    store_name = f"extracted_{domain}_{timestamp}"
+    
+    # Step 1: Create File Search Store
+    print(f"   → Step 1/3: Creating store '{store_name}'...")
+    try:
+        file_search_store = client.file_search_stores.create(
+            config={'display_name': store_name}
+        )
+    except Exception as e:
+        print(f"\n   ❌ Failed to create File Search store.")
+        print(f"   Error: {e}")
+        print("   Possible causes: API quota exceeded, invalid API key permissions")
+        return
+    
+    # Step 2: Upload file
+    print(f"   → Step 2/3: Uploading {data_json_path.name}...")
+    try:
+        operation = client.file_search_stores.upload_to_file_search_store(
+            file=str(data_json_path),
+            file_search_store_name=file_search_store.name,
+            config={
+                'display_name': f'data_from_{domain}',
+            }
+        )
+    except Exception as e:
+        print(f"\n   ❌ Failed to upload file to store.")
+        print(f"   Store created: {file_search_store.name}")
+        print(f"   Error: {e}")
+        print("   Possible causes: File too large, unsupported format, API limits")
+        return
+    
+    # Step 3: Wait for indexing
+    print("   → Step 3/3: Indexing", end="", flush=True)
+    try:
+        timeout = 120  # 2 minute timeout
+        elapsed = 0
+        while not operation.done and elapsed < timeout:
+            time_module.sleep(3)
+            elapsed += 3
+            operation = client.operations.get(operation)
+            print(".", end="", flush=True)
+        
+        if not operation.done:
+            print(f"\n   ⚠️  Indexing still in progress (timeout after {timeout}s).")
+            print(f"   Store: {file_search_store.name}")
+            print("   The store may still become available shortly.")
+            return
+    except Exception as e:
+        print(f"\n   ❌ Error checking indexing status: {e}")
+        print(f"   Store may still be processing: {file_search_store.name}")
+        return
+    
+    print(" done!")
+    
+    # Success output
+    print("\n" + "=" * 60)
+    print("\033[1;32m   ✅ RAG KNOWLEDGE BASE CREATED SUCCESSFULLY!\033[0m")
+    print("=" * 60)
+    print(f"\n   Store Name: \033[1m{file_search_store.name}\033[0m")
+    print(f"   Source: {source_url}")
+    print(f"   Data: {data_json_path}")
+    
+    # Output Python usage example
+    print("\n   \033[1m📘 Python Usage:\033[0m")
+    print("""
+    from google import genai
+    from google.genai import types
+    
+    client = genai.Client(api_key="YOUR_API_KEY")
+    response = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents="What data was extracted from this page?",
+        config=types.GenerateContentConfig(
+            tools=[
+                types.Tool(
+                    file_search=types.FileSearch(
+                        file_search_store_names=["%s"]
+                    )
+                )
+            ]
+        )
+    )
+    print(response.text)
+    """ % file_search_store.name)
+    
+    # Output curl command
+    api_key_display = GEMINI_API_KEY[:8] + "..." if GEMINI_API_KEY else "YOUR_API_KEY"
+    print("\n   \033[1m📘 cURL Command:\033[0m")
+    print(f"""
+    curl "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$GEMINI_API_KEY" \\
+        -H 'Content-Type: application/json' \\
+        -X POST \\
+        -d '{{
+            "contents": [{{"parts":[{{"text": "What tables were extracted?"}}]}}],
+            "tools": [{{
+                "file_search": {{
+                    "file_search_store_names":["{file_search_store.name}"]
+                }}
+            }}]
+        }}'
+    """)
+    
+    print("=" * 60)
+    print(f"   💡 Tip: Set GEMINI_API_KEY env var before running curl")
+    print("=" * 60 + "\n")
+
+
 if __name__ == "__main__":
     main()
+

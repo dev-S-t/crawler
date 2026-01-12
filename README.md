@@ -61,7 +61,22 @@ uv run python crawler.py "https://www.worldometers.info/world-population/"
 
 # Full smart mode with depth crawling (recommended)
 uv run python crawler.py "https://www.worldometers.info/world-population/" --mode smart --depth smart
+
+# Create RAG Knowledge Base from existing extraction
+uv run python crawler.py --rag-only output/worldometers_info_20260112_091704/data.json
 ```
+
+## 🧠 RAG Knowledge Base Integration
+
+After extraction, the tool can automatically upload the structured data to **Gemini File Search**, creating a searchable Knowledge Base for Q&A.
+
+**Features:**
+- Automatic indexing of extracted JSON
+- Python and cURL code generation for querying
+- Zero-cost storage (part of Gemini API free tier)
+
+**Example Query:**
+> "What are the top 5 countries by population growth rate?"
 
 ---
 
