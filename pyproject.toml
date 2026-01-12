@@ -1,0 +1,20 @@
+[project]
+name = "web-data-extractor"
+version = "1.0.0"
+description = "Production-ready Python tool for extracting structured data from complex web sources"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "aiohttp>=3.9.0",
+    "crawl4ai>=0.7.8",
+    "google-genai>=1.0.0",
+    "pdfplumber>=0.11.0",
+    "pillow>=10.0.0",
+    "pydantic>=2.0.0",
+    "pymupdf>=1.24.0",
+    "python-dotenv>=1.0.0",
+    "rapidfuzz>=3.0.0",
+    "requests>=2.31.0",
+    "tenacity>=8.0.0",
+]
+

@@ -1,0 +1,23 @@
+Subject: Internship Challenge Submission - Web Data Extraction - Sahil Tomar
+
+Dear Hiring Team,
+
+Please find attached my submission for the Web Data Extraction Internship Challenge.
+
+**Deliverables Included:**
+1.  **Standalone Engine (`crawler.py`):** A 55KB production-ready script with a 6-layer extraction pipeline (Network → DOM → LLM → Vision).
+2.  **Project Report:** Detailed architectural breakdown of the solution.
+3.  **Demo Outputs:** Clean, structured JSON from three complex sources:
+    *   **Worldometers** (Real-time JS & Charts)
+    *   **Moneycontrol** (Nested Financial Tables)
+    *   **Punjab Transport** (Scanned PDF Timetables)
+
+**Key Innovations:**
+*   **Source-Agnostic:** Adapts to content type rather than relying on brittle CSS selectors.
+*   **Visual Intelligence:** Successfully extracts data from charts and image-based PDFs using Vision AI.
+*   **Graceful Degradation:** Core extraction features work even without an API key.
+
+I look forward to your feedback.
+
+Best regards,
+Sahil Tomar

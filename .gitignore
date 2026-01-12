@@ -1,0 +1,33 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv/
+
+# Environment files (contains API keys)
+.env
+
+# IDE
+.vscode/
+.idea/
+
+# Output (ignore large binaries, keep logic/json)
+output/**/downloads/
+output/**/raw_network/
+output/**/*.jpg
+output/**/*.png
+output/**/*.pdf
+output/**/*.zip
+
+# Temporary files
+*.tmp
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
